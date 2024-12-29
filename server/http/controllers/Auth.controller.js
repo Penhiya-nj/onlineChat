@@ -14,7 +14,7 @@ class AuthController {
   async sendOTP(req, res, next) {
     try {
       const { email } = req.body;
-      await this.#service.sendOTP(email ,"login" , 1000*2.5*60);
+      await this.#service.sendOTP(email, "login", 1000 * 2.5 * 60);
       return res.json({
         message: AuthMessage.sentOTPSuccessfully,
       });
@@ -51,7 +51,7 @@ class AuthController {
         data: user,
       });
     } catch (error) {
-      err = error;
+      let err = error;
       err.errorLevel = error.errorLevel || "authController";
       next(err);
     }
@@ -86,7 +86,7 @@ class AuthController {
       const { email, password } = req.body
 
       const accessToken = await this.#service.login(email, password)
-
+      
       return res.status(200).json({
         accessToken,
         message: "copy and save your access token \n"
@@ -98,18 +98,15 @@ class AuthController {
 
   }
 
-  async requestOtp(req, res, next) {
-    // Logic for requesting an OTP
-    next();
-  }
+
 
 
 
   async changePassword(req, res, next) {
     try {
       const user = req.user
-      await this.#service.sendOTP(user.email , "changePassword" , 1000*60*2.5 )
-      res.send("please check your email and use the code to insert new password")
+      await this.#service.sendOTP(user.email, "changePassword", 1000 * 60 * 2.5)
+      res.send("please check your email and use the code to  change your password")
     } catch (err) {
       next(err)
     }
@@ -117,9 +114,14 @@ class AuthController {
 
   async resetPassword(req, res, next) {
     try {
-      const {newPassword, otp } = req.body
+      if (req.user.email !== req.body.email)
+        throw new createHttpError.BadRequest("please use your registered email")
 
-      await this.#service.resetPassword(newPassword, otp , req.user.email)
+      const { password, otp } = req.body
+
+      await this.#service.resetPassword(password, otp, req.user.email)
+      await this.#service.logout(req.user.accessToken)
+      res.send("your password changed , please login with new password")
     }
     catch (err) {
       next(err)
@@ -127,14 +129,19 @@ class AuthController {
   }
 
   async refreshToken(req, res, next) {
-    // Logic for refreshing access token
+
     next();
   }
 
   async logout(req, res, next) {
-    // Logic for logging out a user
-    next();
-  }
+    try {
+      await this.#service.logout(req.user.accessToken)
+      res.send("you logged out :  " + new Date())
+    }
+    catch (error) {
+      next(error)
+    }
+  } 
   // async updateUser(req, res, next) {
   //   let err;
   //   try {

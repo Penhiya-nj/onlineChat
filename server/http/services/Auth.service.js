@@ -15,7 +15,7 @@ class AuthService {
     this.#UserModel = UserModel;
   }
 
-  async sendOTP(email  , type , duration = 1000*60*2.5) {
+  async sendOTP(email, type, duration = 1000 * 60 * 2.5) {
     const user = await this.#UserModel.findOne({ email });
 
     console.log(process.env.EMAIL_ADDRESS);
@@ -24,7 +24,7 @@ class AuthService {
     const otp = {
       code: randomInt(100000, 999999),
       expiresIn: now + duration,
-      type : type
+      type: type
     };
 
     // check if user exists
@@ -32,7 +32,7 @@ class AuthService {
       throw new createHttpError.NotFound(AuthMessage.NotFound)
 
     // check if user's otp expired
-    if (user.otp && user.otp.expiresIn > now )
+    if (user.otp && user.otp.expiresIn > now)
       throw new createHttpError.BadRequest(AuthMessage.OtpCodeNotExpired);
 
     //set the otp 
@@ -59,7 +59,7 @@ class AuthService {
     if (user?.otp?.expiresIn < now)
       throw new createHttpError.Unauthorized(AuthMessage.OtpCodeExpired);
 
-    if(user?.otp.type !== "login")
+    if (user?.otp.type !== "login")
       throw new createHttpError.Unauthorized(AuthMessage.OtpCodeIsIncorrect);
     /*check the code against DB
      * if wrong throw an exception
@@ -71,19 +71,43 @@ class AuthService {
     if (!user.isEmailVerified) {
       user.isEmailVerified = true;
     }
-    
+
     /*generate  Access Token with internal function  @signToken   */
     const accessToken = this.signToken({ email, id: user._id });
     /*set user access token  */
     user.accessToken = accessToken;
+    user.otp.expiresIn = now - 1000
     /*save user info  */
     await user.save();
     /*return access token to auth Controller  */
     return accessToken;
   }
 
-  async logout(req) {
-    //implement later
+  async logout(token) {
+    if (!token) {
+      throw new createHttpError.BadRequest('Token is required for logout.');
+    }
+
+    // Decode the token to get expiration
+    const decodedToken = jwt.decode(token);
+    if (!decodedToken || !decodedToken.exp) {
+      throw new createHttpError.Unauthorized('Invalid token.');
+    }
+
+    const expiresAt = new Date(decodedToken.exp * 1000); // Convert exp to a Date
+
+    // Find the user and add the token to the blacklist
+    const userId = decodedToken.id; // Adjust this to match your JWT payload
+    const user = await this.#UserModel.findById(userId);
+
+    if (!user) {
+      throw new createHttpError.NotFound('User not found.');
+    }
+
+    user.blacklist.push({ token, expiresAt });
+    user.accessToken = "blacklisted"
+    await user.save();
+
   }
 
   async #sendEmail(to, otpCode) {
@@ -116,28 +140,53 @@ class AuthService {
 
   async login(email, password) {
 
-    const user = await this.#UserModel.findOne({ email : email })
+    const user = await this.#UserModel.findOne({ email: email })
+    const now = new Date().getTime();
 
-    if (!user){ 
+    if (!user) {
       throw new createHttpError.NotFound(AuthMessage.NotFound)
     }
-    console.log(user)
+    //console.log(user)
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
-    if (!isPasswordValid){
+    if (!isPasswordValid) {
       throw new createHttpError.Unauthorized("invalid credentials ")
     }
 
-    if (!user.isEmailVerified){
+    if (!user.isEmailVerified) {
       throw new createHttpError.BadRequest("verify your email first please")
     }
 
-    const accessToken = jwt.sign(
-      { id: user._id, role: user.role },
+    let accessToken = "";
+
+    accessToken = jwt.sign(
+      { email: user.email, id: user._id, },
       process.env.JWT_SECRETE_KEY,
-      { expiresIn: "1h" }
+      { expiresIn: "1y" }
     )
 
+    if (user?.accessToken) {
+      try {
+
+        const decodedToken = jwt.decode(user.accessToken);
+
+        if (!decodedToken || !decodedToken.exp) {
+          console.log('need new token')
+        }
+
+        if (decodedToken.exp * 1000 > now) {
+          accessToken = user.accessToken
+
+        }
+      }
+      catch (error) {
+        console.log(error)
+      }
+    }
+
+
+    user.accessToken = accessToken
+    user.save()
     return accessToken;
 
   }
@@ -173,7 +222,7 @@ class AuthService {
     await newUser.save();
 
     // send verification link via email
-    await this.sendOTP(newUser.email)
+    await this.sendOTP(newUser.email, 'login')
 
     //return user info if needed
     return newUser;
@@ -181,7 +230,7 @@ class AuthService {
 
   };
 
-  async resetPassword(newPassword ,code , email){
+  async resetPassword(newPassword, code, email) {
 
     const user = await this.CheckUserExistByEmail(email);
     /**we need this moment for check the token  */
@@ -189,19 +238,27 @@ class AuthService {
     /*check the token
      * if it's expired throw an exception that we caught in controller
      */
-    if (user?.otp?.expiresIn < now)
-      throw new createHttpError.Unauthorized(AuthMessage.OtpCodeExpired);
+    // if (user?.otp?.expiresIn < now)
+    //   throw new createHttpError.Unauthorized(AuthMessage.OtpCodeExpired);
 
 
-    if(user?.otp.type !== "changePassword")
+    if (user?.otp.type !== "changePassword")
       throw new createHttpError.Unauthorized(AuthMessage.OtpCodeIsIncorrect);
 
     /*check the code against DB
      * if wrong throw an exception
      */
-    
     if (user?.otp?.code !== code)
       throw new createHttpError.Unauthorized(AuthMessage.OtpCodeIsIncorrect);
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword
+    user.otp.expiresIn = now - 1000
+
+    user.save()
+
+
+
 
   }
 
@@ -271,12 +328,52 @@ class AuthService {
   async whoami(user) {
     try {
       console.log(user);
-      const result = await this.#UserModel
-        .find(
-          { _id: user._id },
-          { accessToken: 1, role: 1, email: 1, mobile: 1, _id: 0 }
-        )
-        .lean();
+      const result = await this.#UserModel.aggregate([
+        { $match: { _id: user._id } },  // Match the user by ID
+        {
+          $lookup: {
+            from: 'websites',  // Join with websites collection
+            localField: 'websites',  // Reference to the user's websites field
+            foreignField: '_id',  // Foreign reference to the website's _id
+            as: 'websites'  // The alias for the websites array
+          }
+        },
+        {
+          $unwind: '$websites'  // Flatten the websites array
+        },
+        {
+          $lookup: {
+            from: 'operators',  // Join with operators collection
+            localField: 'websites.operators',  // Reference to the operators field in websites
+            foreignField: '_id',  // Foreign reference to the operator's _id
+            as: 'websites.operators'  // Operators will be embedded in the website object
+          }
+        },
+        {
+          $group: {
+            _id: '$_id',  // Group by user ID
+            username: { $first: '$username' },
+            email: { $first: '$email' },
+            websites: { $push: '$websites' },  // Recreate the websites array
+            role: { $first: '$role' },  // Include other user fields
+            isEmailVerified: { $first: '$isEmailVerified' }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            username: 1,
+            email: 1,
+            role: 1,
+            isEmailVerified: 1,
+            websites: {
+              _id: 1,
+              name: 1,
+              operators: { _id: 1, name: 1 }
+            }
+          }
+        }
+      ]);
       console.log(result);
       return result;
     } catch (error) {

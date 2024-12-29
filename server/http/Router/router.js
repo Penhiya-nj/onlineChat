@@ -1,6 +1,6 @@
 const { Router } = require("express");
-const {productRouter} = require('./product.routes')
 const {AuthRouter} = require('./Auth.routes');
+const { websiteRouter } = require("./website.routes");
 
 const router = Router();
 
@@ -8,6 +8,7 @@ const router = Router();
 
 
 router.use("/auth" , AuthRouter)
+router.use("/website" , websiteRouter)
 
 
 

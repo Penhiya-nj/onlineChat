@@ -9,6 +9,7 @@ const schema = Joi.object({
   mobile: Joi.string().optional(),
   email: Joi.string().email().optional(),
 }).unknown(false);
+exports.schema = schema;
 
 const registerSchema = Joi.object({
   username: Joi.string()
@@ -33,6 +34,7 @@ const registerSchema = Joi.object({
       'any.required': 'Password is required.',
     }),
 });
+exports.registerSchema = registerSchema;
 
 class AuthValidator {
   constructor() {

@@ -45,6 +45,15 @@
  *                      type: string
  *                  role:
  *                      type: string
+ *          changePassword:
+ *              type: object
+ *              properties:
+ *                  email:
+ *                      type: string
+ *                  otp:
+ *                      type: string
+ *                  password:
+ *                      type: string
  */
 /**
  * @swagger
@@ -200,11 +209,42 @@
 /**
  * @swagger
  *
- *  /auth/change-password:
+ *  /website:
  *      get:
  *          summary: get the user
  *          tags:
  *              - Auth
+ *          responses:
+ *              200:
+ *                  description: success
+ *
+ */
+/**
+ * @swagger
+ *
+ *  /auth/change-password:
+ *      get:
+ *          summary: request a pass change 
+ *          tags:
+ *              - Auth
+ *          responses:
+ *              200:
+ *                  description: success
+ *
+ */
+/**
+ * @swagger
+ *
+ *  /auth/reset-password:
+ *      post:
+ *          summary: change the user password 
+ *          tags:
+ *              - Auth
+ *          requestBody:
+ *              content:
+ *                  application/json:
+ *                      schema:
+ *                          $ref: "#/components/schemas/changePassword"
  *          responses:
  *              200:
  *                  description: success
