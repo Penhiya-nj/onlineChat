@@ -1,3 +1,4 @@
+require("dotenv").config();
 const autoBind = require("auto-bind");
 const nodemailer = require("nodemailer");
 const UserModel = require("../../database/models/user.model");
@@ -5,14 +6,17 @@ const createHttpError = require("http-errors");
 const { AuthMessage } = require("../common/messages/Auth.messages");
 const { randomInt } = require("crypto");
 const jwt = require("jsonwebtoken");
-require("dotenv").config();
 const bcrypt = require("bcrypt")
+const ChatwootAPI = require("../common/utils/chatwootApi.util");
+
 
 class AuthService {
   #UserModel;
+  #api
   constructor() {
     autoBind(this);
     this.#UserModel = UserModel;
+    this.#api = new ChatwootAPI(process.env.chatwoot_api_base_url, process.env.chatwoot_api_token);
   }
 
   async sendOTP(email, type, duration = 1000 * 60 * 2.5) {
@@ -208,6 +212,14 @@ class AuthService {
       throw new createHttpError.BadRequest("email already exist")
     }
 
+    const dataForChatwoot = {
+      name: username,
+      email: email,
+      password: password
+    }
+    const userInChatwoot = await this.#api.createUser(dataForChatwoot)
+    console.log(userInChatwoot)
+  
     // hash password 
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log("password hashed ")
@@ -215,9 +227,10 @@ class AuthService {
       username,
       email,
       password: hashedPassword,
-      isEmailVerified: false, // پیش‌فرض عدم تایید ایمیل
+      isEmailVerified: false, 
+      chatwoot_admin : {chatwoot_id : userInChatwoot.id}
     });
-
+    
     //save the user in database
     await newUser.save();
 
@@ -251,6 +264,10 @@ class AuthService {
     if (user?.otp?.code !== code)
       throw new createHttpError.Unauthorized(AuthMessage.OtpCodeIsIncorrect);
 
+    const userInChatwoot =  await this.#api.updateUser(user.chatwoot_admin.chatwoot_id , {
+      password: newPassword
+    })
+    
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword
     user.otp.expiresIn = now - 1000

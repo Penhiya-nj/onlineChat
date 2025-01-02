@@ -11,6 +11,11 @@ const ChatwootAPI = require("../common/utils/chatwootApi.util");
 const { features } = require("process");
 const mongoose = require('mongoose');
 
+/**this class do all the dirty work behind the scene for controller class 
+ * the website Controller class uses this class to communicate with local DB (mongoDB) 
+ * also communicate with chatwoot api service  to effect on chatwoot DB as well 
+ * ach method in the controller class relies on a dedicated and 
+ * corresponding method in the service class   */
 class WebsiteService {
     #UserModel;
     #WebsiteModel
@@ -23,12 +28,10 @@ class WebsiteService {
     }
 
     async create(user, data) {
-
-        if (!user.chatwoot_admin) {
-            
-        }
         let result;
         try {
+
+            // create an account in chatwoot by chatwoot api (chatwoot DB)
             result = await this.#api.createAccount(
                 {
                     name: data.name,
@@ -38,17 +41,26 @@ class WebsiteService {
                 }
             )
 
-            result = await this.#api.updateAccount(result.id, { features: { agent_management: false } })
+            // update account for take agent management from creator in chatwoot dashboard   
+            //result = await this.#api.updateAccount(result.id, { features: { agent_management: false } })
 
+
+            //assign an admin user to created account ( accounts need at least  1 admin to be maintained)
+            const resultUserAccount = await this.#api.createAccountUser(result.id, {
+                user_id: user.chatwoot_admin.chatwoot_id,
+                role: 'administrator'
+            })
+
+            // add hte created account to express database(local app DB)
             const website = await this.#WebsiteModel.create({
-                chatwoot_id: result.id,
+                chatwoot_id: result.id,//55
                 name: result.name,
                 url: result.domain,
                 owner: user._id
             })
             return website;
         } catch (error) {
-            //delete if there was an error 
+            //delete account if there was an error (rollback) 
             await this.#api.deleteAccount(result.id)
             console.log(error)
             error.level = 'service'
@@ -58,15 +70,24 @@ class WebsiteService {
 
     }
 
-
+    /**
+     * 
+     * @param {*} websiteId 
+     * @param {*} user 
+     * @returns website(from chatwoot DB)
+     */
     async getOne(websiteId, user) {
         try {
             //console.log(user)
-
+            //check the account(website) ownership and return it 
             const result = await this.findWebsiteAndVerifyOwnership(websiteId, user._id);
 
+            //return error if the user was not the owner or the website did not exist 
             if (!result.success)
                 throw createHttpError.NotFound("website doesn't exist")
+
+
+            //return the website data 
             return await this.#api.getAccount(result.data.chatwoot_id)
 
         } catch (error) {
@@ -77,16 +98,23 @@ class WebsiteService {
         }
 
     }
-
+    /**
+     * returns all website created by the given user 
+     * @param {*} user 
+     * @returns [WebsiteModel]
+     */
     async getAll(user) {
         try {
+            //check if user is valid (its unnecessary  BTW)
             if (!mongoose.isValidObjectId(user._id)) {
                 throw new Error('Invalid userId format');
             }
+
+            //find  all websites from local database (express DB ) and select some fields  
             const websites = await this.#WebsiteModel.find({ owner: user._id })
                 .select('_id name url operators').lean()
 
-
+            //return the data to controller 
             return { success: true, data: websites };
         } catch (error) {
             console.error('Error in listUserWebsites:', error);
@@ -96,14 +124,24 @@ class WebsiteService {
         }
     }
 
-
+    /**
+     * gets a website id and data to update 
+     * the website in both chatwoot and local database 
+     * @param {*} user 
+     * @param {*} websiteId 
+     * @param {*} data 
+     * @returns 
+     */
     async update(user, websiteId, data) {
         let result
         try {
+            //find website and validate the ownership 
             const website = await this.findWebsiteAndVerifyOwnership(websiteId, user._id)
 
-            if(!website.success) throw createHttpError.NotFound("website doesn't exist or wrong id")
+            //return error if the user was not the owner of the given website
+            if (!website.success) throw createHttpError.NotFound("website doesn't exist or wrong id")
 
+            //update the website in chatwoot
             result = await this.#api.updateAccount(website.data.chatwoot_id,
                 {
                     name: data.name,
@@ -112,27 +150,40 @@ class WebsiteService {
                 }
             )
 
+            // update the website in local DB 
             const localWebsite = await this.#WebsiteModel.findById(website.data._id)
             localWebsite.name = result.name
             localWebsite.url = result.domain
 
+            //return the updated website 
             return localWebsite
         } catch (error) {
             throw error
         }
     }
 
+    /**
+     * get a website id and deletes it in both DBs 
+     * @param {*} user 
+     * @param {*} websiteId 
+     * @returns 
+     */
     async delete(user, websiteId) {
 
         try {
+            //check the ownership of website with the given user and website id 
             const website = await this.findWebsiteAndVerifyOwnership(websiteId, user._id)
 
+            //return errors fo above check results
             if (!website.success) throw createHttpError.NotFound("website doesn't exist")
 
+            //if no error, delete the account in chatwoot      
             const result = await this.#api.deleteAccount(website.data.chatwoot_id)
 
+            //if no errors, delete the website in local DB 
             const localResult = this.#WebsiteModel.findByIdAndDelete(website.data._id)
 
+            //return the data of deleted website 
             return localResult;
         } catch (error) {
             throw error
@@ -141,6 +192,13 @@ class WebsiteService {
 
 
 
+
+    /**
+     * the helper for check the ownership of a website by the given user 
+     * @param {*} websiteId 
+     * @param {*} userId 
+     * @returns 
+     */
 
     async findWebsiteAndVerifyOwnership(websiteId, userId) {
         try {
@@ -189,4 +247,5 @@ class WebsiteService {
 
 }
 
+//export a module so can be used in other modules 
 module.exports = new WebsiteService()

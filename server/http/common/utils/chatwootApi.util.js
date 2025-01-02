@@ -80,7 +80,14 @@ class ChatwootAPI {
         const endpoint = '/platform/api/v1/users';
         return this.request(endpoint, 'POST', data);
     }
-
+    /**
+     * ایجاد کاربر جدید
+     */
+    async createAccountUser(account_id,data) {
+        const endpoint = `/platform/api/v1/accounts/${account_id}/account_users`;
+        return this.request(endpoint, 'POST', data);
+    }
+    ///platform/api/v1/accounts/{account_id}/account_users
     /**
      * دریافت اطلاعات کاربر
      */
@@ -97,6 +104,9 @@ class ChatwootAPI {
         return this.request(endpoint, 'PATCH', data);
     }
 
+
+
+    
     /**
      * حذف کاربر
      */
