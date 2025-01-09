@@ -25,8 +25,8 @@ class WebsiteService {
         this.#UserModel = UserModel;
         this.#WebsiteModel = websiteModel
         this.#api = new ChatwootAPI(process.env.chatwoot_api_base_url, process.env.chatwoot_api_token);
-    }
-
+    } 
+ 
     async create(user, data) {
         let result;
         try {
@@ -43,8 +43,8 @@ class WebsiteService {
 
             // update account for take agent management from creator in chatwoot dashboard   
             //result = await this.#api.updateAccount(result.id, { features: { agent_management: false } })
-
-
+            console.log(result)
+ 
             //assign an admin user to created account ( accounts need at least  1 admin to be maintained)
             const resultUserAccount = await this.#api.createAccountUser(result.id, {
                 user_id: user.chatwoot_admin.chatwoot_id,
@@ -78,10 +78,10 @@ class WebsiteService {
      */
     async getOne(websiteId, user) {
         try {
-            //console.log(user)
+            console.log(user)
             //check the account(website) ownership and return it 
             const result = await this.findWebsiteAndVerifyOwnership(websiteId, user._id);
-
+ 
             //return error if the user was not the owner or the website did not exist 
             if (!result.success)
                 throw createHttpError.NotFound("website doesn't exist")
@@ -94,8 +94,8 @@ class WebsiteService {
             console.error('Error in listUserWebsites:', error);
             error.level = 'service'
             error.status = 404
-            throw error
-        }
+            throw error 
+        }  
 
     }
     /**

@@ -1,0 +1,142 @@
+version: '3.8'
+
+networks:
+  app-network:
+    driver: bridge
+  chatwoot_default:
+    external: true
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: express-backend
+    ports:
+      - "${EXPOSED_PORT}:${PORT}"
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - PORT=${PORT}
+      - JWT_EXPIRE=${JWT_EXPIRE}
+      - MONGO_URI=mongodb://mongo:27017/${MONGO_DB_NAME}
+      - JWT_SECRETE_KEY=${JWT_SECRETE_KEY}
+      - COOKIE_SECRETE_KEY=${COOKIE_SECRETE_KEY}
+      - EMAIL_PASS=${EMAIL_PASS}
+      - EMAIL_ADDRESS=${EMAIL_ADDRESS}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASS=${ADMIN_PASS}
+      - chatwoot_api_token=${chatwoot_api_token}
+      - chatwoot_api_base_url=${chatwoot_api_base_url}
+    volumes:
+      - .:/app
+    depends_on:
+      - mongo
+    restart: always
+    networks:
+      - app-network
+      - chatwoot_default
+
+  mongo:
+    image: mongo:5.0
+    container_name: mongo
+    environment:
+      - MONGO_INITDB_DATABASE=${MONGO_DB_NAME}
+    volumes:
+      - mongo-data:/data/db
+    restart: always
+    networks:
+      - app-network
+
+  mongo-express:
+    image: mongo-express
+    container_name: mongo-express-chat
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_URL=mongodb://mongo:27017/${MONGO_DB_NAME}
+      # - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      - ME_CONFIG_OPTIONS_EDITORTHEME="ambiance"
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_ADMIN_USERNAME}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_ADMIN_PASSWORD}
+      - ME_CONFIG_MONGODB_ALLOW_DISK_USE=false #ME_CONFIG_MONGODB_ALLOW_DISK_USE
+    depends_on:
+      - mongo
+    networks:
+      - app-network
+
+volumes:
+  mongo-data:
+
+
+
+# version: '3.8'
+
+# networks:
+#   app-network:
+#     driver: bridge
+#   chatwoot_default:
+#     external: true
+
+# services:
+#   backend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: express-backend
+#     ports:
+#       - "${EXPOSED_PORT}:${PORT}"
+#     environment:
+#       - NODE_ENV=${NODE_ENV}
+#       - PORT=${PORT}
+#       - JWT_EXPIRE=${JWT_EXPIRE}
+#       - MONGO_URI=mongodb://localhost:27017/${MONGO_DB_NAME}
+#       - JWT_SECRETE_KEY=${JWT_SECRETE_KEY}
+#       - COOKIE_SECRETE_KEY=${COOKIE_SECRETE_KEY}
+#       - EMAIL_PASS=${EMAIL_PASS}
+#       - EMAIL_ADDRESS=${EMAIL_ADDRESS}
+#       - ADMIN_EMAIL=${ADMIN_EMAIL}
+#       - ADMIN_PASS=${ADMIN_PASS}
+#       - chatwoot_api_token=${chatwoot_api_token}
+#       - chatwoot_api_base_url=http://localhost:3000
+#     volumes:
+#       - .:/app
+#     depends_on:
+#       - mongo
+#     restart: always
+#     networks:
+#       - app-network
+#       - chatwoot_default
+
+#   mongo:
+#     image: mongo:5.0
+#     container_name: mongo
+#     ports:
+#       - "27017"
+#     environment:
+#       - MONGO_INITDB_DATABASE=${MONGO_DB_NAME}
+#     volumes:
+#       - mongo-data:/data/db
+#     restart: always
+#     networks:
+#       - app-network
+
+#   mongo-express:
+#     image: mongo-express
+#     container_name: mongo-express-chat
+#     ports:
+#       - "8081:8081"
+#     environment:
+#       - ME_CONFIG_MONGODB_SERVER=mongo
+#       - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_EXPRESS_ADMIN_USERNAME}
+#       - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_EXPRESS_ADMIN_PASSWORD}
+#     depends_on:
+#       - mongo
+#     restart: always
+#     networks:
+#       - app-network
+
+# volumes:
+#   mongo-data:

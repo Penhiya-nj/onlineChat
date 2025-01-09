@@ -8,6 +8,7 @@ const { randomInt } = require("crypto");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt")
 const ChatwootAPI = require("../common/utils/chatwootApi.util");
+const TokenService = require("../common/utils/TokenService")
 
 
 class AuthService {
@@ -219,7 +220,7 @@ class AuthService {
     }
     const userInChatwoot = await this.#api.createUser(dataForChatwoot)
     console.log(userInChatwoot)
-  
+
     // hash password 
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log("password hashed ")
@@ -227,10 +228,10 @@ class AuthService {
       username,
       email,
       password: hashedPassword,
-      isEmailVerified: false, 
-      chatwoot_admin : {chatwoot_id : userInChatwoot.id}
+      isEmailVerified: false,
+      chatwoot_admin: { chatwoot_id: userInChatwoot.id }
     });
-    
+
     //save the user in database
     await newUser.save();
 
@@ -264,10 +265,10 @@ class AuthService {
     if (user?.otp?.code !== code)
       throw new createHttpError.Unauthorized(AuthMessage.OtpCodeIsIncorrect);
 
-    const userInChatwoot =  await this.#api.updateUser(user.chatwoot_admin.chatwoot_id , {
+    const userInChatwoot = await this.#api.updateUser(user.chatwoot_admin.chatwoot_id, {
       password: newPassword
     })
-    
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword
     user.otp.expiresIn = now - 1000
@@ -356,7 +357,10 @@ class AuthService {
           }
         },
         {
-          $unwind: '$websites'  // Flatten the websites array
+          $unwind: {
+            path: '$websites',  // Flatten the websites array
+            preserveNullAndEmptyArrays: true  // Include users with no websites
+          }
         },
         {
           $lookup: {
@@ -386,11 +390,11 @@ class AuthService {
             websites: {
               _id: 1,
               name: 1,
-              operators: { _id: 1, name: 1 }
             }
           }
         }
       ]);
+
       console.log(result);
       return result;
     } catch (error) {
